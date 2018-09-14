@@ -1,0 +1,104 @@
+#
+#import re
+#import pandas as pd
+#import numpy as np
+#from xgboost import XGBClassifier
+
+import pandas as pd
+import xgboost as xgb
+from sklearn import preprocessing
+
+dict={}
+path=r'C:\Users\Administrator\Desktop\data\train.txt'
+
+
+train = pd.read_table(r'C:\Users\Administrator\Desktop\data\round1_iflyad_train.txt',sep=" ",delimiter="\t")
+tests=pd.read_table(r'C:\Users\Administrator\Desktop\data\round1_iflyad_test_feature.txt',sep=" ",delimiter="\t")
+train.fillna(method='pad')
+tests.fillna(method='pad')
+train = train.drop('time', axis=1)
+train = train.drop('city', axis=1)
+train = train.drop('province', axis=1)
+
+train = train.drop('model', axis=1)
+train = train.drop('make', axis=1)
+train = train.drop('os_name', axis=1)
+train = train.drop('f_channel', axis=1)
+train = train.drop('app_id', axis=1)
+train = train.drop('advert_name', axis=1)
+train = train.drop('inner_slot_id', axis=1)
+train = train.drop('osv',axis=1)
+train = train.drop('user_tags',axis=1)
+
+tests = tests.drop('model', axis=1)
+tests = tests.drop('make', axis=1)
+tests = tests.drop('os_name', axis=1)
+tests = tests.drop('f_channel', axis=1)
+tests = tests.drop('app_id', axis=1)
+tests = tests.drop('advert_name', axis=1)
+tests = tests.drop('inner_slot_id', axis=1)
+tests = tests.drop('time', axis=1)
+tests = tests.drop('city', axis=1)
+tests = tests.drop('province', axis=1)
+tests = tests.drop('osv', axis=1)
+tests = tests.drop('user_tags', axis=1)
+
+for f in train.columns:
+    if train[f].dtype=='object':
+        if f != 'click':
+            print(f)
+            lbl = preprocessing.LabelEncoder()
+            train[f] = lbl.fit_transform(list(train[f].values))
+for f in tests.columns:
+    if tests[f].dtype == 'object':
+        print(f)
+        lbl = preprocessing.LabelEncoder()
+        lbl.fit(list(tests[f].values))
+        tests[f] = lbl.transform(list(tests[f].values))
+
+
+feature_columns_to_use = ['instance_id',	
+	'carrier',	'nnt',	'os',			'adid',	'advert_id',	
+'orderid',	'advert_industry_inner',
+'campaign_id',	'creative_id',	'creative_tp_dnf',	'app_cate_id',
+	'creative_type',	'creative_width',	'creative_height',	'creative_is_jump',
+'creative_is_download',	'creative_is_js','creative_is_voicead',	'creative_has_deeplink',	'app_paid',		
+]
+
+big_train = train[feature_columns_to_use]
+big_test = tests[feature_columns_to_use]
+train_X = big_train.as_matrix()
+test_X = big_test.as_matrix()
+train_y = train['click']
+gbm = xgb.XGBClassifier(silent=1, max_depth=10,
+                    n_estimators=1000, learning_rate=0.05)
+gbm.fit(train_X, train_y)
+predictions = gbm.predict(test_X)
+
+submission = pd.DataFrame({'instance_id': tests['instance_id'],
+        'click': predictions})
+#print(submission)
+submission.to_csv("submission.csv")
+#print(data['time'].value_counts(),'time')
+#data.count()#data.drop([190])
+#data.drop()
+
+#data=data.dropna(axis=0)#按行删除有空缺的数据
+#da=data.loc[data["click"] == 1]
+##去重函数
+#def drop(data,lable):
+#    ad=data.loc[:,[lable]]
+#    ad=ad.drop_duplicates() 
+#    return ad
+#ad=drop(data,'adid')#广告id
+#ad1=drop(da,'adid')
+#
+# #为adid去重
+#advert_id=drop(data,'advert_id')#广告主id
+#advert_id1=drop(da,'advert_id')
+#
+#user_tags=drop(data,'user_tags')#用户id
+#user=drop(da,'user_tags')
+#        
+#model=drop(data,'model')
+#mod=drop(da,'model')

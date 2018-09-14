@@ -1,0 +1,100 @@
+import pandas as pd
+import numpy as np
+import lightgbm as lgb
+import warnings
+import time
+import datetime
+from math import radians, cos, sin, asin, sqrt
+import random
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.feature_selection import RFE
+from sklearn.linear_model import LinearRegression
+import matplotlib.pyplot as plt	
+
+dict={}
+path=r'C:\Users\Administrator\Desktop\data\train.txt'
+la=1001650
+l=198787
+
+train = pd.read_table(r'C:\Users\Administrator\Desktop\data\round1_iflyad_train.txt',sep=" ",delimiter="\t")
+#tests=pd.read_table(r'C:\Users\Administrator\Desktop\data\round1_iflyad_test_feature.txt',sep=" ",delimiter="\t")
+ta=train[train['click']>0]
+train.drop('f_channel',axis=1)
+train=train[~train['devtype'].isin([1])]
+l1=1001332
+          
+def percent(data,label,le):
+    a=data[label].unique()
+    print(a)
+    p=0
+    c=[]
+    P={}
+    for x in a:
+        print(x)
+        b=np.sum(data[label]==x)
+        c.append(b)
+        p=b/le
+        P[x]=p
+        print(P)
+    return c,P     
+def condp(data,da,label,la,l):
+    a1,de1=percent(data,label,la)
+    a2,dev2=percent(da,label,l)
+    print(de1,dev2)
+    a=de1.keys() & dev2.keys() 
+    P={}
+    for x in a:
+        p=dev2[x]/de1[x]
+        P[x]=p
+    return P,a1,a2
+dev,d1,d2=condp(train,ta,'devtype',l1,l1)
+a1,de1=percent(train,'carrier',l1)
+a2,de2=percent(ta,'carrier',l)
+
+        
+    
+   
+
+
+
+#ti=min(train['time'])
+#train['time']-=ti
+
+#ta.to_csv('../compare_all.csv',index=False)
+
+
+#p_dev=[train['devtype']==dev1/1001650,ta['devtype'].unique()/198787]
+
+#train.fillna(method='pad')
+#tests.fillna(method='pad')
+#train = train.drop('time', axis=1)
+#train = train.drop('city', axis=1)
+#train = train.drop('province', axis=1)
+#
+#train = train.drop('model', axis=1)
+#train = train.drop('make', axis=1)
+#train = train.drop('os_name', axis=1)
+#train = train.drop('f_channel', axis=1)
+#train = train.drop('app_id', axis=1)
+#train = train.drop('advert_name', axis=1)
+#train = train.drop('inner_slot_id', axis=1)
+#train = train.drop('osv',axis=1)
+##train = train.drop('user_tags',axis=1)
+#
+#tests = tests.drop('model', axis=1)
+#tests = tests.drop('make', axis=1)
+#tests = tests.drop('os_name', axis=1)
+#tests = tests.drop('f_channel', axis=1)
+#tests = tests.drop('app_id', axis=1)
+#tests = tests.drop('advert_name', axis=1)
+#tests = tests.drop('inner_slot_id', axis=1)
+#tests = tests.drop('time', axis=1)
+#tests = tests.drop('city', axis=1)
+#tests = tests.drop('province', axis=1)
+#tests = tests.drop('osv', axis=1)
+##tests = tests.drop('user_tags', axis=1)
+#
+#
+##
+##train['user_tags'].value_counts().plot.bar()
+#plt.show()

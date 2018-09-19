@@ -1,0 +1,218 @@
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelBinarizer
+from sklearn import preprocessing
+import xgboost as xgb
+import lightgbm as lgb
+from sklearn.model_selection import KFold
+from sklearn.linear_model import LinearRegression
+from sklearn import metrics
+le = preprocessing.LabelEncoder()
+
+t1 = pd.read_table(r'C:\Users\Administrator\Desktop\data\round1_iflyad_train.txt',sep=" ",delimiter="\t")
+test=pd.read_table(r'C:\Users\Administrator\Desktop\data\round1_iflyad_test_feature.txt',sep=" ",delimiter="\t")
+t1.drop(['user_tags','make','model','osv'],inplace=True,axis=1)
+test.drop(['user_tags','make','model','osv'],inplace=True,axis=1)
+
+
+def trans(data,da,la):
+    a1=data[la].drop_duplicates()
+    a2=da[la].drop_duplicates()
+    a=pd.Series(list(set(a1).union(set(a2))))
+    le.fit(a)
+    da[la]=le.transform(da[la])
+    data[la]=le.transform(data[la])
+    return data,da
+t1,test=trans(t1,test,'os_name')
+t1,test=trans(t1,test,'advert_industry_inner')
+t1,test=trans(t1,test,'inner_slot_id')
+t1,test=trans(t1,test,'advert_name')
+def ls(da,l):
+    for i in l:
+        da=da.str.lstrip(i)
+    return da
+t1['f_channel']=ls(t1['f_channel'],['i','q','y','_','-'])
+test['f_channel']=ls(test['f_channel'],['i','q','y','_','-'])
+
+
+def ti(data):
+    
+    data['week']=data['time']//86400
+    data['hour']=(data['time']-data['week']*86400)//3600
+    data['mini']=(data['time']-data['week']*86400-data['hour']*3600)//60
+    data['sec']=data['time']-data['week']*86400-data['hour']*3600-data['mini']*60
+    data['wek']=data['week']%7
+    return data
+test=ti(test)
+t1=ti(t1)
+t1.drop(['time','week'],inplace=True,axis=1)
+test.drop(['time','week'],inplace=True,axis=1)
+
+t1['f_channel']=ls(t1['f_channel'],['i','q','y','_','-']).astype('float')
+test['f_channel']=ls(test['f_channel'],['i','q','y','_','-']).astype('float')
+t1.fillna(-1,inplace=True)
+test.fillna(-1,inplace=True)
+#t1,test=trans(t1,test,'f_channel')
+ids=test[['instance_id']]
+y_train=t1['click']
+y_train=y_train.ravel()
+x_train=t1
+x_test=test
+x_train.drop(['click'],inplace=True,axis=1)
+#x_test.drop(['instance_id'],inplace=True,axis=1)
+
+#
+class BasicModel(object):
+    """Parent class of basic models""" 
+    def train(self, x_train, y_train, x_val, y_val):
+        """return a trained model and eval metric o validation data"""
+        pass
+    
+    def predict(self, model, x_test):
+        """return the predicted result"""
+        pass
+    
+    def get_oof(self, x_train, y_train, x_test, n_folds = 6):
+        """K-fold stacking"""
+        num_train, num_test = x_train.shape[0], x_test.shape[0]
+        oof_train = np.zeros((num_train,)) 
+        oof_test = np.zeros((num_test,))
+        oof_test_all_fold = np.zeros((num_test, n_folds))
+        aucs = []
+        print('a')
+      
+        KF = KFold(n_splits = n_folds, random_state=2017)
+        a=KF.split(x_train)
+        for i, (train_index, val_index) in enumerate(KF.split(x_train)):
+            print('{0} fold, train {1}, val {2}'.format(i, len(train_index), len(val_index)))
+            print('b',train_index,val_index)
+            x_tra, y_tra = x_train.loc[train_index], y_train[train_index]
+            print('c')
+            x_val, y_val = x_train.loc[val_index], y_train[val_index]
+           
+            model, auc = self.train(x_tra, y_tra, x_val, y_val)
+            aucs.append(auc)
+            oof_train[val_index] = self.predict(model, x_val)
+            oof_test_all_fold[:, i] = self.predict(model, x_test)
+        oof_test = np.mean(oof_test_all_fold, axis=1)
+        print('all aucs {0}, average {1}'.format(aucs, np.mean(aucs)))
+        return oof_train, oof_test
+
+
+# create two models for first-layer stacking: xgb and lgb
+
+
+class XGBClassifier(BasicModel):
+    def __init__(self):
+        """set parameters"""
+        self.num_rounds=1000
+        self.early_stopping_rounds = 15
+        self.params = {
+            'objective': 'binary:logistic',
+            'eta': 0.1,
+            'max_depth': 8,
+            'eval_metric': 'logloss',
+            'seed': 0,
+            'silent' : 0
+         }
+        
+    def train(self, x_train, y_train, x_val, y_val):
+        print('train with xgb model')
+        
+        xgbtrain = xgb.DMatrix(x_train, y_train)
+        xgbval = xgb.DMatrix(x_val, y_val)
+        watchlist = [(xgbtrain,'train'), (xgbval, 'val')]
+        model = xgb.train(self.params, 
+                          xgbtrain, 
+                          self.num_rounds,
+                          watchlist,
+                          early_stopping_rounds = self.early_stopping_rounds)
+        return model, float(model.eval(xgbval).split()[1].split(':')[1])
+
+    def predict(self, model, x_test):
+        print('test with xgb model')
+        xgbtest = xgb.DMatrix(x_test)
+        return model.predict(xgbtest)
+
+
+class LGBClassifier(BasicModel):
+    def __init__(self):
+        self.num_boost_round = 2000
+        self.early_stopping_rounds = 15
+        self.params = {
+            'task': 'train',
+            'boosting_type': 'gbdt',
+            'objective': 'binary',
+            'metric': { 'binary_logloss'},
+            'num_leaves': 60,
+            'learning_rate': 0.05,
+            # 'scale_pos_weight': 1.5,
+            'feature_fraction': 0.5,
+            'bagging_fraction': 1,
+            'bagging_freq': 5,
+            'max_bin': 300,
+            'is_unbalance': True,
+            'lambda_l2': 5.0,
+            'verbose' : 1
+            }
+        
+    def train(self, x_train, y_train, x_val, y_val):
+        print('train with lgb model')
+        
+        
+        lgbtrain = lgb.Dataset(x_train, y_train)
+        lgbval = lgb.Dataset(x_val, y_val)
+        model = lgb.train(self.params, 
+                          lgbtrain,
+                          valid_sets = lgbval,
+                          verbose_eval = self.num_boost_round,
+                          num_boost_round = self.num_boost_round,
+                          early_stopping_rounds = self.early_stopping_rounds)
+        return model, model.best_score['valid_0']['binary_logloss']
+    
+    def predict(self, model, x_test):
+        print('test with lgb model')
+        return model.predict(x_test, num_iteration=model.best_iteration)
+
+
+# get output of first layer models and construct as input for the second layer          
+
+
+lgb_classifier = LGBClassifier()
+lgb_oof_train, lgb_oof_test = lgb_classifier.get_oof(x_train, y_train, x_test)
+print(lgb_oof_train.shape, lgb_oof_test.shape)        
+    
+xgb_classifier = XGBClassifier()
+xgb_oof_train, xgb_oof_test = xgb_classifier.get_oof(x_train, y_train, x_test)
+print(xgb_oof_train.shape, xgb_oof_test.shape)
+
+input_train = [xgb_oof_train, lgb_oof_train] 
+input_test = [xgb_oof_test, lgb_oof_test]
+
+stacked_train = np.concatenate([f.reshape(-1, 1) for f in input_train], axis=1)
+stacked_test = np.concatenate([f.reshape(-1, 1) for f in input_test], axis=1)
+print(stacked_train.shape, stacked_test.shape)
+
+
+
+# use LR as the model of the second layer
+
+
+# split for validation
+n = int(stacked_train.shape[0] * 0.8)
+x_tra, y_tra = stacked_train[:n], y_train[:n]
+x_val, y_val = stacked_train[n:], y_train[n:]
+model = LinearRegression()
+model.fit(x_tra,y_tra)
+y_pred = model.predict(x_val)
+print(metrics.roc_auc_score(y_val, y_pred))
+
+# predict on test data
+final_model = LinearRegression()
+final_model.fit(stacked_train, y_train)
+test_prediction = final_model.predict(stacked_test)
+output = pd.DataFrame({'instance_id': ids['instance_id'],
+                      'predicted_score':test_prediction})
+##
+output.to_csv(r"C:\Users\Administrator\Desktop\data\submission1.csv", index=False)

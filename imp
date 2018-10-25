@@ -1,0 +1,586 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Oct 13 14:01:28 2018
+
+@author: tking
+"""
+import lightgbm as lgb
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.model_selection import StratifiedKFold
+from sklearn import preprocessing
+
+
+col_numeric  = ['x_94','x_1', 'x_2', 'x_3', 'x_4', 'x_5', 'x_6', 'x_7', 'x_8', 'x_9', 'x_10', 'x_11', 'x_12', 'x_13', 'x_14', 'x_15', 'x_16', 'x_17', 'x_18', 'x_19', 'x_20', 'x_21', 'x_22', 'x_23', 'x_24', 'x_25', 'x_26', 'x_27', 'x_28', 'x_29', 'x_30', 'x_31', 'x_32', 'x_33', 'x_34', 'x_35', 'x_36', 'x_37', 'x_38', 'x_39', 'x_40', 'x_41', 'x_42', 'x_43', 'x_44', 'x_45', 'x_46', 'x_47', 'x_48', 'x_49', 'x_50', 'x_51', 'x_52', 'x_53', 'x_54', 'x_55', 'x_56', 'x_57', 'x_58', 'x_59', 'x_60', 'x_61', 'x_62', 'x_63', 'x_64', 'x_65', 'x_66', 'x_67', 'x_68', 'x_69', 'x_70', 'x_71', 'x_72', 'x_73', 'x_74', 'x_75', 'x_76', 'x_77', 'x_78', 'x_79', 'x_80', 'x_81', 'x_82', 'x_83', 'x_84', 'x_85', 'x_86', 'x_87', 'x_88', 'x_89', 'x_90', 'x_91', 'x_93', 'x_95' ]
+
+col_discrete = ['x_96', 'x_97', 'x_98', 'x_99', 'x_100', 'x_101', 'x_139', 'x_140', 'x_141', 'x_142', 'x_143', 'x_144', 'x_145', 'x_146', 'x_147', 'x_148', 'x_149', 'x_150', 'x_151', 'x_152', 'x_153', 'x_154', 'x_155', 'x_156', 'x_157']
+
+#数据路径
+path_train = r'C:\Users\Administrator\Desktop\da\cup\train_xy.csv'
+path_test = r'C:\Users\Administrator\Desktop\da\cup\test_all.csv'
+#读取数据
+train_data = pd.read_csv(path_train)
+test_data=pd.read_csv(path_test)
+#train_data['cust_group']=train_data['cust_group'].str.lstrip('group_')
+#test_data['cust_group']=test_data['cust_group'].str.lstrip('group_')
+label=train_data['y']
+test_data['y']=-1
+
+data=pd.concat([train_data,test_data],axis=0,ignore_index=True)
+
+for var in col_discrete :
+    var_dummies = pd.get_dummies(data[var])
+    var_dummies.columns = [var+'_'+str(i) for i in range(var_dummies.shape[1])]
+#    if var not in ['draft_param4','draft_param6','draft_param7']:
+#        draft_train_test.drop(var,axis=1,inplace=True)
+    data = pd.concat([data,var_dummies],axis=1)
+#    x=int(x.lstrip('group_'))
+data['cust_group']=data['cust_group'].str.lstrip('group_')
+#lis=['x_94','x_92','x_96', 'x_97', 'x_98', 'x_99', 'x_100', 'x_101', 'x_102', 'x_103', 'x_104', 'x_105', 'x_106', 'x_107', 'x_108', 'x_109', 'x_110', 'x_111', 'x_112', 'x_113', 'x_114', 'x_115', 'x_116', 'x_117', 'x_118', 'x_119', 'x_120', 'x_121', 'x_122', 'x_123', 'x_124', 'x_125', 'x_126', 'x_127', 'x_128', 'x_129', 'x_130', 'x_131', 'x_132', 'x_133', 'x_134', 'x_135', 'x_136', 'x_137', 'x_138', 'x_139', 'x_140', 'x_141', 'x_142', 'x_143', 'x_144', 'x_145', 'x_146', 'x_147', 'x_148', 'x_149', 'x_150', 'x_151', 'x_152', 'x_153', 'x_154', 'x_155', 'x_156', 'x_157']
+l=['x_18','x_155','x_140','x_16','x_19','x_147','x_13','x_12','x_23','x_6','x_28','x_34','x_151']
+data.drop(l,axis=1,inplace=True)
+a=[]
+for x in col_numeric:
+    if x not in l:
+        a.append(x)
+col_numeric=a        
+a=[]
+for x in col_discrete:
+    if x not in l:
+        a.append(x)
+col_discrete=a
+train_data=data[data['y']!=-1]
+test_data=data[data['y']==-1]
+data_train_copy = train_data.copy()
+
+train_Raw = data_train_copy#[~data_train_copy['cust_id'].isin(data_get_values_row_50)] 
+#train_Raw.drop(drop_columns,axis =1,inplace =True)
+#
+##测试数据
+test_Raw = test_data.copy() 
+#test_Raw.drop(drop_columns, axis = 1,inplace =True)
+#
+##处理空值
+############训练集start#############
+train_x_Null = train_Raw.copy()
+train_x_null = train_x_Null[['cust_id']]
+#
+############测试集start#############
+test_x_Null = test_Raw.copy()
+
+test_x_null = test_x_Null[['cust_id']]
+#
+
+
+
+
+
+
+
+train_Rank =  train_Raw[['cust_id']+col_numeric].copy()
+train_rank = pd.DataFrame(train_Rank.cust_id,columns=['cust_id'])
+for feature in col_numeric:
+    train_rank['r'+feature] = train_Rank[feature].rank(method='max')
+    
+
+ ###########测试集start#############
+test_Rank =  test_Raw[['cust_id']+col_numeric].copy()
+test_rank = pd.DataFrame(test_Rank.cust_id,columns=['cust_id'])
+for feature in col_numeric:
+    test_rank['r'+feature] = test_Rank[feature].rank(method='max')
+test_rank.to_csv( r'C:\Users\Administrator\Desktop\da\cup\test_rank.csv' , index=False)
+
+# 离散数据
+train_x_discretization = train_rank.copy()
+train_x_discretization = train_x_discretization.drop(['cust_id'],axis=1)
+train_x_discretization[train_x_discretization<1500] = 1
+train_x_discretization[(train_x_discretization>=1500)&(train_x_discretization<3000)] = 2
+train_x_discretization[(train_x_discretization>=3000)&(train_x_discretization<4500)] = 3
+train_x_discretization[(train_x_discretization>=4500)&(train_x_discretization<6000)] = 4
+train_x_discretization[(train_x_discretization>=6000)&(train_x_discretization<7500)] = 5
+train_x_discretization[(train_x_discretization>=7500)&(train_x_discretization<9000)] = 6
+train_x_discretization[(train_x_discretization>=9000)&(train_x_discretization<10500)] = 7
+train_x_discretization[(train_x_discretization>=10500)&(train_x_discretization<12000)] = 8
+train_x_discretization[(train_x_discretization>=12000)&(train_x_discretization<13500)] = 9
+train_x_discretization[train_x_discretization>=13500] = 10
+#离散特征的命名：在原始特征前加'd',如'x1'的离散特征为'dx1'
+rename_dict = {s:'d'+s[1:] for s in train_x_discretization.columns.tolist()}
+train_x_discretization = train_x_discretization.rename(columns=rename_dict)
+train_x_discretization['cust_id'] =  train_Raw['cust_id']
+
+
+train_x_discretization.shape
+
+ ###########测试集start#############
+test_x_discretization = test_rank.copy()
+test_uid = test_x_discretization.cust_id
+test_x_discretization = test_x_discretization.drop(['cust_id'],axis=1)
+test_x_discretization[test_x_discretization<1500] = 1
+test_x_discretization[(test_x_discretization>=1500)&(test_x_discretization<3000)] = 2
+test_x_discretization[(test_x_discretization>=3000)&(test_x_discretization<4500)] = 3
+test_x_discretization[(test_x_discretization>=4500)&(test_x_discretization<6000)] = 4
+test_x_discretization[(test_x_discretization>=6000)&(test_x_discretization<7500)] = 5
+test_x_discretization[(test_x_discretization>=7500)&(test_x_discretization<9000)] = 6
+test_x_discretization[(test_x_discretization>=9000)&(test_x_discretization<10500)] = 7
+test_x_discretization[(test_x_discretization>=10500)&(test_x_discretization<12000)] = 8
+test_x_discretization[(test_x_discretization>=12000)&(test_x_discretization<13500)] = 9
+test_x_discretization[test_x_discretization>=13500] = 10
+#离散特征的命名：在原始特征前加'd',如'x1'的离散特征为'dx1'
+rename_dict = {s:'d'+s[1:] for s in test_x_discretization.columns.tolist()}
+test_x_discretization = test_x_discretization.rename(columns=rename_dict)
+test_x_discretization['cust_id'] = test_uid
+
+test_x_discretization.to_csv( r'C:\Users\Administrator\Desktop\da\cup\test_x_discretization.csv' , index=False)
+
+
+#计数数据
+train_x_nd = train_x_discretization.copy()
+train_x_nd['n1'] = (train_x_nd==1).sum(axis=1)
+train_x_nd['n2'] = (train_x_nd==2).sum(axis=1)
+train_x_nd['n3'] = (train_x_nd==3).sum(axis=1)
+train_x_nd['n4'] = (train_x_nd==4).sum(axis=1)
+train_x_nd['n5'] = (train_x_nd==5).sum(axis=1)
+train_x_nd['n6'] = (train_x_nd==6).sum(axis=1)
+train_x_nd['n7'] = (train_x_nd==7).sum(axis=1)
+train_x_nd['n8'] = (train_x_nd==8).sum(axis=1)
+train_x_nd['n9'] = (train_x_nd==9).sum(axis=1)
+train_x_nd['n10'] = (train_x_nd==10).sum(axis=1)
+train_x_nd = train_x_nd[['cust_id','n1','n2','n3','n4','n5','n6','n7','n8','n9','n10']]
+
+ ###########测试集start#############
+test_x_nd = test_x_discretization.copy()
+test_x_nd['n1'] = (test_x_nd==1).sum(axis=1)
+test_x_nd['n2'] = (test_x_nd==2).sum(axis=1)
+test_x_nd['n3'] = (test_x_nd==3).sum(axis=1)
+test_x_nd['n4'] = (test_x_nd==4).sum(axis=1)
+test_x_nd['n5'] = (test_x_nd==5).sum(axis=1)
+test_x_nd['n6'] = (test_x_nd==6).sum(axis=1)
+test_x_nd['n7'] = (test_x_nd==7).sum(axis=1)
+test_x_nd['n8'] = (test_x_nd==8).sum(axis=1)
+test_x_nd['n9'] = (test_x_nd==9).sum(axis=1)
+test_x_nd['n10'] = (test_x_nd==10).sum(axis=1)
+test_x_nd = test_x_nd[['cust_id','n1','n2','n3','n4','n5','n6','n7','n8','n9','n10']]
+
+test_x_nd.to_csv( r'C:\Users\Administrator\Desktop\da\cup\test_x_nd.csv' , index=False)
+
+
+train_eleven = pd.merge(train_x_nd,train_x_null,on='cust_id')[['cust_id','n1','n2','n3','n4','n5','n6','n7','n8','n9','n10']]
+rank_train_uid =train_rank ['cust_id']
+rank_train_xx =train_rank.drop('cust_id',axis = 1)
+rank_train = rank_train_xx 
+rank_train['cust_id'] = rank_train_uid
+
+discret_train = train_x_discretization.copy()
+
+train_Raw.shape   
+rank_train.shape  
+discret_train.shape 
+train_eleven.shape 
+#将原始特征，排序特征，离散特征，以及其他11维特征（n1～n10，discret_null）合并
+train_xy = pd.merge(train_Raw,rank_train,on='cust_id')
+train_xy = pd.merge(train_xy,discret_train,on='cust_id')
+train_xy = pd.merge(train_xy,train_eleven,on='cust_id')
+
+
+
+
+ ###########测试集start#############
+test_eleven = pd.merge(test_x_nd,test_x_null,on='cust_id')[['cust_id','n1','n2','n3','n4','n5','n6','n7','n8','n9','n10']]
+rank_test_uid =test_rank ['cust_id']
+rank_test_xx =test_rank.drop('cust_id',axis = 1)
+rank_test = rank_test_xx 
+rank_test['cust_id'] = rank_test_uid
+
+discret_test = test_x_discretization.copy()
+
+test_Raw.shape   
+rank_test.shape 
+discret_test.shape 
+test_eleven.shape 
+#将原始特征，排序特征，离散特征，以及其他11维特征（n1～n10，discret_null）合并
+test_xy = pd.merge(test_Raw,rank_test,on='cust_id')
+test_xy = pd.merge(test_xy,discret_test,on='cust_id')
+test_xy = pd.merge(test_xy,test_eleven,on='cust_id')
+print(test_xy.shape,'b')
+print(test_xy.shape,'b')
+l=['x_80','x_2','x_81','x_92','x_1','x_48','x_63','x_54','x_52','x_55','x_62',
+   'n6','n7','n8','n2','n3','n5','n10','n4','n9']
+i=0
+m=l.copy()
+abab=[]
+for x in l:
+    
+    m.remove(x)
+    for y in m:
+        print(l,'sdsdsdsd')
+        i=str(x)+str(y)
+        abab.append(i)
+        train_xy[i]=train_xy[x]*train_xy[y]
+        test_xy[i]=test_xy[x]*test_xy[y]
+
+predict_result=pd.DataFrame()
+
+id_cols = ['cust_id','y','cust_group','rx_75','dx_72','x_101_1',
+'x_100_0',
+'x_100_2',
+'x_101_0',
+'x_99_0',
+'x_98_3',
+'x_98_2',
+'x_98_1',
+'x_98_0',
+'x_100_1',
+'x_141_6',
+'x_139_0',
+'x_139_2',
+'x_146_2',
+'x_146_1',
+'x_146_0',
+'x_145_2',
+'x_145_1',
+'x_145_0',
+'x_144_3',
+'x_144_2',
+'x_144_1',
+'x_144_0',
+'x_143_2',
+'x_143_1',
+'x_143_0',
+'x_142_1',
+'x_92x_63',
+'x_92x_54',
+'x_92x_52',
+'x_92x_55',
+'x_92x_62',
+'x_92n7',
+'x_92n3',
+'x_142_0',
+'x_92n9',
+'x_97_0',
+'x_141_5',
+'x_141_4',
+'x_141_3',
+'x_141_2',
+'x_140_2',
+'x_97_3',
+'rx_11',
+'x_96_1',
+'x_125',
+'x_119',
+'x_120',
+'x_121',
+'x_122',
+'x_123',
+'x_124',
+'x_126',
+'x_117',
+'x_127',
+'x_128',
+'x_129',
+'x_130',
+'x_131',
+'x_132',
+'x_118',
+'x_116',
+'x_134',
+'x_108',
+'x_102',
+'x_103',
+'x_104',
+'x_105',
+'x_106',
+'x_107',
+'x_109',
+'x_115',
+'x_11',
+'x_110',
+'x_111',
+'x_112',
+'x_113',
+'x_114',
+'x_133',
+'x_135',
+'x_98',
+'x_74',
+'x_33',
+'x_37',
+'x_147_1',
+'x_55',
+'x_70',
+'x_71',
+'x_75',
+'x_3',
+'x_85',
+'x_86',
+'x_89',
+'x_9',
+'x_92',
+'x_94',
+'x_31',
+'x_27',
+'x_136',
+'x_148',
+'x_137',
+'x_138',
+'x_143',
+'x_144',
+'x_145',
+'x_146',
+'x_149',
+'x_25',
+'x_15',
+'x_150',
+'x_152',
+'x_17',
+'x_21',
+'x_22',
+'x_147_0',
+'x_154_3',
+'x_147_2',
+'dx_7',
+'dx_17',
+'dx_15',
+'dx_14',
+'dx_11',
+'dx_10',
+'dx_9',
+'dx_8',
+'dx_5',
+'dx_48',
+'dx_4',
+'dx_3',
+'dx_2',
+'dx_1',
+'dx_94',
+'rx_3',
+'rx_90',
+'dx_21',
+'dx_22',
+'dx_24',
+'dx_25',
+'dx_46',
+'dx_42',
+'dx_41',
+'dx_40',
+'dx_39',
+'dx_38',
+'dx_37',
+'dx_36',
+'dx_35',
+'dx_33',
+'dx_32',
+'dx_31',
+'dx_29',
+'dx_27',
+'dx_26',
+'rx_89',
+'rx_88',
+'rx_87',
+'rx_50',
+'rx_48',
+'rx_47',
+'rx_37',
+'rx_33',
+'rx_32',
+'rx_31',
+'rx_9',
+'rx_29',
+'rx_27',
+'rx_26',
+'rx_25',
+'rx_10',
+'rx_22',
+'rx_21',
+'rx_17',
+'rx_49',
+'rx_51',
+'rx_86',
+'rx_52',
+'rx_85',
+'rx_77',
+'rx_76',
+'x_10',
+'rx_74',
+'rx_73',
+'rx_71',
+'rx_70',
+'rx_66',
+'rx_65',
+'rx_63',
+'rx_62',
+'rx_5',
+'rx_55',
+'rx_54',
+'dx_47',
+'dx_49',
+'x_147_3',
+'x_155_3',
+'x_153_0',
+'x_153_2',
+'x_153_3',
+'x_154_0',
+'rx_15',
+'x_155_0',
+'x_155_2',
+'x_156_1',
+'dx_51',
+'x_156_3',
+'x_157_1',
+'x_157_5',
+'x_157_6',
+'rx_94',
+'n7',
+'n6',
+'x_152_2',
+'x_152_1',
+'x_152_0',
+'x_151_2',
+'x_147_4',
+'x_148_0',
+'x_148_1',
+'x_148_2',
+'x_148_3',
+'x_149_0',
+'x_149_1',
+'x_149_2',
+'x_149_3',
+'x_150_0',
+'x_150_1',
+'x_150_2',
+'x_150_3',
+'x_151_0',
+'x_151_1',
+'n2',
+'rx_1',
+'dx_90',
+'dx_69',
+'dx_67',
+'dx_66',
+'dx_65',
+'dx_64',
+'dx_63',
+'dx_62',
+'dx_61',
+'dx_60',
+'dx_59',
+'dx_58',
+'dx_56',
+'dx_55',
+'dx_54',
+'dx_53',
+'dx_52',
+'dx_68',
+'dx_70',
+'dx_89',
+'dx_71',
+'dx_88',
+'dx_87',
+'dx_86',
+'dx_85',
+'dx_83',
+'dx_82',
+'dx_81',
+'dx_79',
+'dx_78',
+'dx_77',
+'dx_76',
+'dx_75',
+'dx_74',
+'dx_73',
+'dx_72',
+'rx_75']
+tr_x = train_xy.drop(id_cols,axis =1)
+tr_y = train_xy['y']
+train_features = [col for col in tr_x.columns if  tr_x[col].dtypes!='O']    
+print(train_features)
+
+train =tr_x.values
+lable = tr_y.values
+#train=preprocessing.scale(train,axis=0) 
+ 
+ 
+print(test_xy.columns.tolist())
+predict_result['cust_id']=train_xy['cust_id'].values
+test=test_xy.drop(id_cols,axis =1).values
+#test=preprocessing.scale(test,axis=0)
+model = lgb.LGBMClassifier(boosting_type='gbdt', num_leaves=31, max_depth=-1, learning_rate=0.01, n_estimators=5000,
+                           max_bin=425, subsample_for_bin=50000, objective='binary', min_split_gain=0,
+                           min_child_weight=5, min_child_samples=10, subsample=0.8, subsample_freq=1,
+                           colsample_bytree=1, reg_alpha=3, reg_lambda=5, seed=1000, n_jobs=10, silent=True)
+
+#model = lgb.LGBMClassifier(**best,n_estimators=5000)
+#model = lgb.LGBMClassifier()
+t=100
+
+skf = StratifiedKFold(n_splits=5, random_state=20, shuffle=True)
+baseloss = []
+loss = 0
+predict_result['pred_prob']=0
+for i, (train_index, test_index) in enumerate(skf.split(tr_x, tr_y)):
+    print("Fold", i)
+    
+    
+    
+    dtrain = lgb.Dataset(train[train_index],lable[train_index]) 
+    dval   = lgb.Dataset(train[test_index], lable[test_index],reference=dtrain) 
+
+    params = {
+        'boosting_type':'gbdt',
+        'task':'train', 
+        'min_split_gain':0,
+        'num_leaves': 31, 
+        'min_child_weight':5,
+        'objective': 'binary',
+        'metric': 'auc',
+        'min_data_in_leaf': 30,
+        'learning_rate': 0.01,
+        'feature_fraction': 0.85,
+        'bagging_fraction': 0.85,
+        'bagging_freq': 5, 
+        'subsample':0.8, 
+        'subsample_freq':1,
+        'max_bin':425,
+        'num_threads': 64,
+        'random_state':10
+    }  
+    lgb_model_step  = lgb.train(params, dtrain, num_boost_round=2000,valid_sets=[dtrain,dval], early_stopping_rounds=100)
+a=pd.DataFrame({'features':train_features, 'imp':lgb_model_step.feature_importance()}).sort_values('imp',ascending=False)
+
+a.to_csv(r'C:\Users\Administrator\Desktop\dd.csv',index=False)
+#    lgb_model = model.fit(train[train_index], lable[train_index],
+#                          eval_names =['train','valid'],
+#                          eval_metric='auc',
+#                          eval_set=[(train[train_index], lable[train_index]), 
+#                                    (train[test_index], lable[test_index])],early_stopping_rounds=100)
+#    baseloss.append(lgb_model.best_score_['valid']['auc'])
+#    loss += lgb_model.best_score_['valid']['auc']
+#    train_p=lgb_model.predict_proba(train, num_iteration=lgb_model.best_iteration_)[:, 1]
+#    test_pred= lgb_model.predict_proba(test, num_iteration=lgb_model.best_iteration_)[:, 1]
+#    predict_result['pred_prob']=predict_result['pred_prob']+train_p
+#    if loss<t:
+#        t=loss
+#        train_p=lgb_model.predict_proba(train, num_iteration=lgb_model.best_iteration_)[:, 1]
+#        test_pred= lgb_model.predict_proba(test, num_iteration=lgb_model.best_iteration_)[:, 1]
+#        predict_result['pred_prob']  = train_p
+#        
+#        print('test mean:', test_pred.mean())
+#    else:
+#        pass
+#predict_result['pred_prob']=0
+#loss=pd.Series(losses)
+#lo=loss.rank(method='max')
+#for i in lo:
+#    i=5-i.astype(int)
+#    print(i)
+#    a=w[i]
+#    predict_result['pred_prob']=predict_result['pred_prob']+predict_result['pred_prob'+str(i)]*a
+#
+#from sklearn.metrics import roc_auc_score
+#a=predict_result['pred_prob'].values
+#print(roc_auc_score(lable, a))
+
+
+predict_result['pred_prob']=predict_result['pred_prob']/5 
+print('Fold_5:', baseloss, '\navg_auc:',loss/5)
+predict_result[['cust_id', 'pred_prob']].to_csv(r'C:\Users\Administrator\Desktop\da\sub1.csv'  , index=False)

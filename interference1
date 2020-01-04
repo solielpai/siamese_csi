@@ -1,0 +1,112 @@
+import tensorflow as tf 
+import matplotlib as plt
+class siamese:
+
+    # Create model
+    def __init__(self):
+        self.x1 = tf.placeholder(tf.float32, [None, 30,30,3])
+        self.x2 = tf.placeholder(tf.float32, [None, 30,30,3])
+
+        with tf.variable_scope("siames") as scope:
+            self.o1 = self.network(self.x1)
+            scope.reuse_variables()
+            self.o2 = self.network(self.x2)
+ 
+        # Create loss
+        self.y_ = tf.placeholder(tf.float32, [None])
+        self.loss,self.losses,self.neg = self.loss_with_spring()
+
+
+
+    def network(self, x):
+        w_1 = self.we([3, 3, 3, 16])
+        b_1 = self.bi([16])
+        w_2 = self.we([3, 3, 16, 4])
+        b_2 = self.bi([4])
+        w_c1 = self.we([8 * 8 * 4, 100])
+        b_c1 =self.bi([100])
+        w_c2 =self.we([256, 128])
+        b_c2 = self.bi([128])
+        w_c3 = self.we([128, 10])
+        b_c3 = self.bi([10])
+        h_conv1 = tf.nn.relu(self.conv2d(x, w_1) + b_1)
+        h_pool1 = self.max_pool(h_conv1)
+
+        h_conv2 = tf.nn.relu(self.conv2d(h_pool1, w_2) + b_2)
+        h_pool2 = self.max_pool(h_conv2)
+        # 全连接层
+       # %w_c1 = self.we([8 * 8 * 64, 1024])
+       # b_c1 =self. bi([1024])
+        x_1 = tf.reshape(h_pool2, [-1, 8 * 8 *4])
+        h_f1 = tf.nn.relu(tf.matmul(x_1, w_c1) + b_c1)
+        h_d = tf.nn.dropout(h_f1, 0.6)
+        w_c2 = self.we([100, 10])
+        b_c2 = self.bi([10])
+        logits = tf.nn.softmax(tf.matmul(h_d, w_c2) + b_c2)
+        return logits
+
+    def fc_layer(self, bottom, n_weight, name):
+        assert len(bottom.get_shape()) == 2
+        n_prev_weight = bottom.get_shape()[1]
+        initer = tf.truncated_normal_initializer(stddev=0.01)
+        W = tf.get_variable(name+'W', dtype=tf.float32, shape=[n_prev_weight, n_weight], initializer=initer)
+        b = tf.get_variable(name+'b', dtype=tf.float32, initializer=tf.constant(0.01, shape=[n_weight], dtype=tf.float32))
+        fc = tf.nn.bias_add(tf.matmul(bottom, W), b)
+        return fc
+
+    def loss_with_spring(self):
+        print('loss,sdsjdsff')
+        margin = 2.0
+        labels_t = self.y_
+#        print(labels_t.shape(),'lsn')
+        labels_f = tf.subtract(1.0, self.y_, name="1-yi")          # labels_ = !labels;
+        eucd2 = tf.pow(tf.subtract(self.o1, self.o2), 2)
+        eucd2 = tf.reduce_sum(eucd2, 1)
+        #eucd = tf.sqrt(eucd2+1e-6, name="eucd")
+        C = tf.constant(margin, name="C")
+        print(labels_t, eucd2,'le')
+        # yi*||CNN(p1i)-CNN(p2i)||^2 + (1-yi)*max(0, C-||CNN(p1i)-CNN(p2i)||^2)
+        pos = tf.multiply(labels_t, eucd2, name="yi_x_eucd2")
+        # neg = tf.mul(labels_f, tf.sub(0.0,eucd2), name="yi_x_eucd2")
+        # neg = tf.mul(labels_f, tf.maximum(0.0, tf.sub(C,eucd2)), name="Nyi_x_C-eucd_xx_2")
+        neg = tf.multiply(labels_f, tf.maximum(tf.subtract(C, eucd2), 0), name="Nyi_x_C-eucd_xx_2")
+        losses = tf.add(pos, neg, name="losses")
+        loss = tf.reduce_mean(losses, name="loss")
+        return loss,losses,eucd2
+#    def predict(self,loss):
+#        loss=self.losses
+#        print(loss.shape)
+#        lo=loss[:,1]
+#        l=loss[:,0]
+#        a=tf.argmin(loss)
+#        print(l[a])
+#        return l[a]
+
+    def we(self,shape):
+        ini = tf.truncated_normal(shape, stddev=0.1)
+        return tf.Variable(ini)
+
+    def bi(self,shape):
+        ini = tf.constant(0.1, shape=shape)
+        return tf.Variable(ini)
+
+    def conv2d(self,x, w):
+        return tf.nn.conv2d(x, w, strides=[1, 1, 1, 1], padding='SAME')
+
+    def max_pool(self,x):
+        return tf.nn.max_pool(x, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
+
+
+    def loss_with_step(self):
+        margin = 2.0
+        labels_t = self.y_
+        labels_f = tf.subtract(1.0, self.y_, name="1-yi")          # labels_ = !labels;
+        eucd2 = tf.pow(tf.subtract(self.o1, self.o2), 2)
+        eucd2 = tf.reduce_sum(eucd2, 1)
+        eucd = tf.sqrt(eucd2+1e-6, name="eucd")
+        C = tf.constant(margin, name="C")
+        pos = tf.mul(labels_t, eucd, name="y_x_eucd")
+        neg = tf.mul(labels_f, tf.maximum(0.0, tf.subtract(C, eucd)), name="Ny_C-eucd")
+        losses = tf.add(pos, neg, name="losses")
+        loss = tf.reduce_mean(losses, name="loss")
+        return loss

@@ -1,0 +1,254 @@
+import os
+import glob
+import time
+import numpy as np
+import tensorflow as tf
+from skimage import io, transform
+import warnings
+import inference
+import pandas as pd
+import time
+
+start = time.time()
+warnings.filterwarnings('ignore')
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
+f = open(r'C:\Users\soliel\Desktop\r.txt', 'a+')  #
+nu = 2
+nl = 6
+lr = 0.1
+pat = r'E:\dda'
+w = 30
+h = 30
+c = 3
+s = []
+n_e = 201
+n_n=11
+b_s = 32
+def read_img(path, w, h, num, nl):
+    cate = [path + '\\' + x for x in os.listdir(path) if os.path.isdir(path + '\\' + x)]
+    i = 0
+    imm = []
+    iii = []
+    imgs = []
+    labels = []
+    labels1 = []
+    j = 0
+    vi = []
+    vl = []
+    for index, folder in enumerate(cate):
+        j = 0
+        for im in glob.glob(folder + '/*.jpg'):
+
+            # print(folder)
+
+            b = folder.lstrip(r'E:\dda/')  #
+            # print(b,'dsffsd')
+            b = int(b)
+            img = io.imread(im)
+            img = transform.resize(img, (w, h, 3))
+            img = img.reshape([2700])
+            if j < num:
+                j += 1
+                imm.append(img)
+                imgs.append(img)
+                labels.append(b)
+                if j % num == 0:
+                    a = np.sum(imm, axis=0)
+
+                    c = a / num
+                    # j += 1
+                    iii.append(c)
+                    imm = []
+                    # print(index,i)
+                    labels1.append(b)
+                    # print(c)
+                    # print(c)
+                    # print(j)
+            if num <= j < nl:
+                # else:
+                j += 1
+                vi.append(img)
+                # vl.append(img)
+                vl.append(b)
+    print('Finished ...')
+
+    return np.asarray(imgs, np.float32), np.asarray(labels, np.float32), np.asarray(iii, np.float32), np.asarray(
+        labels1, np.float32), np.asarray(vi, np.float32), np.asarray(vl, np.float32)
+
+
+data, label, va, l, vi, vl = read_img(path=pat, w=30, h=30, num=nu, nl=nl)
+print(data.shape, label.shape, va.shape, l.shape)
+#print(vl)
+
+
+def messUpOrder(data, label):
+    num_example = data.shape[0]
+
+    arr = np.arange(num_example)
+    np.random.shuffle(arr)
+    #  print(arr)
+    data = data[arr]
+    label = label[arr]
+    #    label=tf.one_hot(label,277, 1, 0) 未进行独热编码
+    #    sess=tf.Session()
+    #    sess.run(tf.global_variables_initializer())
+    #    label=label.eval(session=sess)
+    return data, label
+
+
+x_train, y_train = messUpOrder(data, label)
+x1, y1 = messUpOrder(va, l)
+x_val, y_val = vi, vl
+ss = list(0 for x in range(100))
+print(y_train.shape,y1.shape)
+
+## 将所有数据分为训练集和验证集
+def segmentation(data, label, ratio):  # 暂时不需要
+    num_example = data.shape[0]
+    s = np.int(num_example * ratio)
+    x_train = data[:s]
+    y_train = label[:s]
+    x_val = data[s:]
+    y_val = label[s:]
+
+    return x_train, y_train, x_val, y_val
+
+
+# x_train, y_train, x_val, y_val=segmentation(data, label, ratio=0.8)
+
+
+
+# import visualize
+
+# prepare data and tf.session
+# mnist = input_data.read_data_sets('MNIST_data', one_hot=False)
+sess = tf.InteractiveSession()
+tf.reset_default_graph()
+# setup siamese network
+siames = inference.siamese()
+train_step = tf.train.AdamOptimizer(lr).minimize(siames.loss)
+saver = tf.train.Saver()
+# tf.initialize_all_variables().run()
+tf.Session().run(tf.global_variables_initializer())
+
+
+def minibatches(inputs=None, targets=None, batch_size=None, shuffle=False):
+    #    assert tf.shape(inputs) == len(targets)
+    if shuffle:
+        indices = np.arange(len(inputs))
+        # print(len(inputs),inputs.shape,targets.shape,'输入len')
+        np.random.shuffle(indices)
+    for start_idx in range(0, len(inputs) - batch_size + 1, batch_size):
+        # print(start_idx,'start_idx')
+        if shuffle:
+            excerpt = indices[start_idx:start_idx + batch_size]
+            # print(excerpt.shape,'excerpt')
+        else:
+            excerpt = slice(start_idx, start_idx + batch_size)
+
+            # print(excerpt.shape,'shape',excerpt,'excerpt')
+        # print(inputs[excerpt].shape,targets[excerpt].shape,start_idx,'输出shape')
+        yield (inputs[excerpt], targets[excerpt])
+
+
+model_ckpt = 'model.ckpt'
+new = True
+if os.path.isfile(model_ckpt):
+    input_var = None
+    while input_var not in ['yes', 'no']:
+        input_var = input("We found model.ckpt file. Do you want to load it [yes/no]?")
+    if input_var == 'yes':
+        new = False
+result = []
+m = 0
+xx = 0.0
+rrr=0
+def voting(s):
+    r=[]
+    for i in range(len(s)):
+        s[i].sort(key=lambda x: s[i].count(x))
+        c=s[i].count(s[i][-1])
+        b=[x for x in s[i] if s[i].count(x)==c]
+        b=list(set(b))
+        r.append(b)
+        #print(b)
+
+    return r
+# start training   siamese
+q=[[] for i in range(100)]
+with tf.Session() as sess:
+    # sess.run(tf.initialize_all_variables())
+    sess.run(tf.global_variables_initializer())
+    if new:
+        print('new')
+        n_epoch = n_e
+        batch_size = b_s
+        for step in range(n_epoch):
+            for batch_x1, batch_y1 in minibatches(x_train, y_train, batch_size, shuffle=True):
+                for batch_x2, batch_y2 in minibatches(x1, y1, batch_size, shuffle=True):
+
+                    batch_y = (batch_y1 == batch_y2).astype('float')
+                    # print()
+                    _, loss_v = sess.run([train_step, siames.loss], feed_dict={
+                        siames.x1: batch_x1,
+                        siames.x2: batch_x2,
+                        siames.y_: batch_y})
+                    # print(loss_v)
+
+                    if np.isnan(loss_v):
+                        print('Model diverged with loss = NaN')
+                        quit()
+
+            if step % 10 == 0:
+                print('step %d: loss %.3f' % (step, loss_v))
+
+            if step % (n_n - 1) == 0 and step > 0:
+                m = 0
+                ss=[0 for i in range(100)]
+                # saver.save(sess, r'F:\demo\python\my_code\cpkl\model.ckpt')
+                for batch_x3, batch_y3 in minibatches(x_val, y_val, batch_size=1, shuffle=True):
+                    # print(batch_y,'y')
+                    # print(batch_x,'batch')
+                    batch_x4 = batch_x3.repeat(99, axis=0)
+                    batch_y4 = batch_y3.repeat(99, axis=0)
+                    # print(batch_x1.shape,va.shape)
+                    neg = siames.neg.eval(feed_dict={
+                        siames.x1: x1,
+                        siames.x2: batch_x4
+                    })
+                    #                for x in neg:
+                    a = list(np.where(neg == np.min(neg, axis=0)))
+                    # print(a,'sdsdd')
+                    inde = [y1[x] for x in a[0]]
+                    # print(l)
+                    # for kk in a[0]:
+                    # a= neg.index(min(neg))  #
+                    #   print(kk,l[kk],'sauhdfghsafdsfds')
+                    #   inde.append()
+                    # inde=1
+                    # print(inde,'inde',a[0])
+                    # print(batch_y)
+                    # print(batch_y,inde,'inde')
+                    if batch_y3 in inde:
+                        m += 1
+                        ss[int(batch_y3) - 1] = ss[int(batch_y3) - 1] + 1
+                    result.append(batch_y3)
+                    result.append(inde)
+                for x in range(100):
+                    ss[x] = float(ss[x]) / (nl - nu)
+                rrr = len([x for x in ss if x >= 0.5])
+                print(m,rrr)
+                s.append(str(m / x_val.shape[0]))
+                xx = max(xx, m / x_val.shape[0])
+                print('loss')
+                print(m / x_val.shape[0], x_val.shape, m, xx)
+                # print()
+
+        f.write(' '.join(rrr) + '    ' + str(nu), '/n')
+        f.close()
+    else:
+        pass
+
+end = time.time()
+
+print(str(end))
